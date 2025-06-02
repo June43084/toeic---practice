@@ -1,0 +1,21 @@
+version: '3.8'
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "5000:8080"
+    environment:
+      - FIREBASE_CREDENTIALS_PATH=/app/firebase-adminsdk.json
+      - AUTHOR_CODE=june666
+    volumes:
+      - ./firebase-adminsdk.json:/app/firebase-adminsdk.json:ro
+      - ./allure-results:/app/allure-results
+    networks:
+      - app-network
+
+networks:
+  app-network:
+    driver: bridge

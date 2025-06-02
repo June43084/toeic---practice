@@ -1,0 +1,226 @@
+
+:root {
+    --primary-color: #007BFF; 
+    --secondary-color: #6C757D; 
+    --success-color: #28A745; 
+    --danger-color: #DC3545; 
+    --background-color: #F5F5F5; 
+    --text-color: #333333;
+    --card-background: #FFFFFF; 
+    --border-color: #DDDDDD; 
+}
+
+body {
+    font-family: 'Roboto', sans-serif;
+    background-color: var(--background-color);
+    color: var(--text-color);
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 20px;
+    position: relative;
+}
+
+
+input, button {
+    margin: 10px 0;
+    padding: 10px;
+    border-radius: 4px;
+}
+
+
+.container {
+    display: flex;
+    justify-content: space-between;
+    gap: 20px;
+    width: 100%;
+    margin-top: 40px;
+}
+
+
+.left-column, .right-column {
+    flex: 1;
+    background-color: var(--card-background);
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+
+#word_display {
+    font-size: 36px;
+    font-weight: bold;
+    margin: 20px 0;
+    padding: 20px;
+    background-color: var(--card-background);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    text-align: center;
+}
+
+#word_display a {
+    font-size: 24px;
+    color: var(--primary-color);
+    text-decoration: none;
+}
+
+#word_display a:hover {
+    text-decoration: underline;
+}
+
+
+#allWordsList, #unfamiliarWordsList {
+    border: 1px solid var(--border-color);
+    padding: 10px;
+    border-radius: 5px;
+    background-color: var(--card-background);
+}
+
+#allWordsList div, #unfamiliarWordsList div {
+    padding: 10px;
+    border-bottom: 1px solid #eee;
+    transition: background-color 0.2s ease;
+}
+
+#allWordsList div:hover, #unfamiliarWordsList div:hover {
+    background-color: #e9ecef;
+    cursor: pointer;
+}
+
+
+.unfamiliar {
+    color: var(--danger-color);
+    font-weight: bold;
+}
+
+
+#searchResults {
+    border: 1px solid var(--border-color);
+    padding: 10px;
+    border-radius: 5px;
+    background-color: var(--card-background);
+}
+
+
+button {
+    background-color: var(--primary-color);
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: background-color 0.3s ease;
+    margin-right: 10px;
+}
+
+button:hover {
+    background-color: #0056b3;
+}
+
+.delete-btn {
+    background-color: var(--danger-color);
+}
+
+.delete-btn:hover {
+    background-color: #c82333;
+}
+
+.search-btn {
+    background-color: var(--success-color);
+}
+
+.search-btn:hover {
+    background-color: #218838;
+}
+
+.logout-btn {
+    background-color: var(--danger-color);
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    padding: 10px 20px;
+    border-radius: 5px;
+}
+
+.logout-btn:hover {
+    background-color: #c82333;
+}
+
+
+#word_controls {
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+    margin-top: 20px;
+}
+
+
+input[type="email"], input[type="password"], input[type="text"] {
+    width: 250px;
+    padding: 10px;
+    margin: 8px 0;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    background-color: #f9f9f9;
+}
+
+input[id="auth_code"] {
+    width: 250px;
+    padding: 10px;
+    margin: 8px 0;
+    background-color: #f9f9f9;
+}
+
+
+.auth-section {
+    margin: 0 auto;
+    max-width: 400px;
+    padding: 30px;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    background-color: var(--card-background);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    text-align: center;
+}
+
+.auth-section input {
+    width: 100%;
+    padding: 10px;
+    margin: 10px 0;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+}
+
+.auth-section button {
+    width: 100%;
+    padding: 10px;
+}
+
+
+#message {
+    position: fixed;
+    top: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 10px 20px;
+    border-radius: 5px;
+    z-index: 1000;
+}
+
+.message-delete {
+    background-color: var(--secondary-color);
+    color: white;
+}
+
+
+@media (max-width: 768px) {
+    .container {
+        flex-direction: column;
+    }
+    .left-column, .right-column {
+        flex: none;
+    }
+    input[type="email"], input[type="password"], input[type="text"], input[id="auth_code"] {
+        width: 100%;
+    }
+}

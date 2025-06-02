@@ -1,0 +1,485 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <title>TOEIC 單字學習</title>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap">
+    <link rel="stylesheet" href="/static/index.css">
+    <link rel="icon" type="image/x-icon" href="/static/books.png">
+    <!-- 引入 Firebase JavaScript SDK -->
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
+</head>
+<body>
+    <!-- 登出按鈕（中間上方） -->
+    <button id="logout_btn" onclick="logout()" class="logout-btn" style="display: none;">登出</button>
+
+    <div class="container">
+        <!-- 左邊：單字操作區 -->
+        <div class="left-column" id="word_section" style="display: none;">
+            <h1>TOEIC 單字學習</h1>
+            <div class="input-group">
+                <input type="text" id="word_input" placeholder="輸入單字或關鍵字">
+                <button onclick="saveWord()">儲存單字</button>
+                <button onclick="deleteWord()" class="delete-btn">刪除單字</button>
+                <button onclick="searchWord()" class="search-btn">搜尋單字</button>
+            </div>
+            <div id="searchResults" style="display: none;"></div>
+            <button onclick="toggleAllWordsList()">顯示單字列表</button>
+            <button onclick="toggleUnfamiliarWordsList()">顯示不熟的單字</button>
+            <div id="allWordsList" style="display: none;"></div>
+            <div id="unfamiliarWordsList" style="display: none;"></div>
+        </div>
+
+        <!-- 右邊：複習按鈕與單字顯示 -->
+        <div class="right-column" id="review_section" style="display: none;">
+            <div class="input-group">
+                <button onclick="reviewWords(false)">開始複習</button>
+                <button onclick="reviewWords(true)">複習不熟單字</button>
+                <button onclick="randomWords(false)">隨機10個單字</button>
+                <button onclick="randomWords(true)">隨機10個不熟單字</button>
+            </div>
+            <div id="word_display"></div>
+            <div id="word_controls" style="display: none;"></div>
+        </div>
+
+        <!-- 登入與註冊 -->
+        <div class="auth-section" id="auth_section" style="display: none;">
+            <h1>多益記單字登入</h1>
+            <h2>登入</h2>
+            <input type="email" id="username" placeholder="帳號 (電子郵件)">
+            <input type="password" id="password" placeholder="密碼">
+            <h2><button onclick="login()" id="login_btn">登入</button></h2>
+
+            <h2>註冊</h2>
+            <input type="email" id="reg_username" placeholder="帳號 (電子郵件)" pattern="^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$" title="請輸入英數字組合的電子郵件" required>
+            <input type="password" id="reg_password" placeholder="密碼">
+            <input type="text" id="auth_code" placeholder="作者驗證碼" required>
+            <h2><button onclick="register()">確認註冊</button></h2>
+        </div>
+    </div>
+
+    <div id="message" style="display: none;"></div>
+
+    <script>
+        // Firebase 配置
+        const firebaseConfig = {
+            apiKey: "AIzaSyDfOPNZPFY5T0WFaogiIaZEtIScT_hHJyc",
+            authDomain: "toeic-memorize.firebaseapp.com",
+            projectId: "toeic-memorize",
+            storageBucket: "toeic-memorize.firebasestorage.app",
+            messagingSenderId: "849619503391",
+            appId: "1:849619503391:web:ecf8500a2253369d3bc82a",
+            measurementId: "G-J354L3LLBG"
+        };
+
+        // 初始化 Firebase
+        try {
+            firebase.initializeApp(firebaseConfig);
+        } catch (error) {
+            alert("Firebase 初始化失敗，請檢查配置！錯誤訊息: " + error.message);
+        }
+        const auth = firebase.auth();
+
+        let currentWords = [];
+        let currentIndex = 0;
+
+        // 檢查登入狀態
+        function requireAuth() {
+            const user = auth.currentUser;
+            if (!user) {
+                alert("請先登入！");
+                return null;
+            }
+            return user;
+        }
+
+        // 通用 API 請求函數
+        async function apiRequest(url, bodyData, onSuccess, onError) {
+            const user = requireAuth();
+            if (!user) return;
+            try {
+                const token = await user.getIdToken(true);
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: new URLSearchParams(bodyData).toString()
+                });
+                const data = await response.json();
+                onSuccess(data);
+            } catch (error) {
+                onError(error);
+            }
+        }
+
+        // 監聽使用者登入或登出
+        auth.onAuthStateChanged(user => {
+            if (user) {
+                user.getIdToken().then(token => {
+                    document.getElementById('auth_section').style.display = 'none';
+                    document.getElementById('word_section').style.display = 'block';
+                    document.getElementById('review_section').style.display = 'block';
+                    document.getElementById('logout_btn').style.display = 'block';
+                    loadAllWords();
+                }).catch(error => {
+                    alert("獲取身份驗證失敗，請重新登入！");
+                    logout();
+                });
+            } else {
+                document.getElementById('auth_section').style.display = 'block';
+                document.getElementById('word_section').style.display = 'none';
+                document.getElementById('review_section').style.display = 'none';
+                document.getElementById('logout_btn').style.display = 'none';
+            }
+        });
+
+        // 登出
+        async function logout() {
+            localStorage.removeItem('lastReviewedWord');
+            localStorage.removeItem("lastUserId");
+
+            try {
+                await auth.signOut();
+                alert("已登出！");
+                document.getElementById('auth_section').style.display = 'block';
+                document.getElementById('word_section').style.display = 'none';
+                document.getElementById('review_section').style.display = 'none';
+                document.getElementById('logout_btn').style.display = 'none';
+            } catch (error) {
+                alert("登出失敗 請檢查網路再試試 ");
+            }
+        }
+
+        // 登入
+        async function login() {
+            const email = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            if (!email || !password) {
+                alert("請輸入帳號和密碼！");
+                return; // 如果有欄位是空的，直接終止函數執行
+            }
+            try {
+                const userCredential = await auth.signInWithEmailAndPassword(email, password);
+                alert("登入成功！");
+            } catch (error) {
+                alert("登入失敗，請再確認帳號密碼");
+            }
+        }
+
+        // 註冊
+        async function register() {
+            const email = document.getElementById('reg_username').value;
+            const password = document.getElementById('reg_password').value;
+            const auth_code = document.getElementById('auth_code').value;
+            const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+            if (!emailRegex.test(email)) {
+                alert("Email 格式錯誤！\n只允許英數字及標準符號\n範例: example123@gmail.com");
+                return;
+            }
+            if (!email || !password || !auth_code) {
+                alert("請填寫所有欄位！");
+                return;
+            }
+            try {
+                const response = await fetch('/verify_author', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: `auth_code=${encodeURIComponent(auth_code)}`
+                });
+                const data = await response.json();
+                if (!data.success) {
+                    alert(data.message);
+                    return;
+                }
+
+                const userCredential = await auth.createUserWithEmailAndPassword(email, password);
+                alert("註冊成功！已登入");
+
+            } catch (error) {
+                if (error.code) {
+                     if (error.code === 'auth/email-already-in-use') {
+                        alert('註冊失敗：此電子郵件已被使用！');
+                     } else if (error.code === 'auth/invalid-email') {
+                         alert('註冊失敗：電子郵件格式無效！');
+                     } else if (error.code === 'auth/operation-not-allowed') {
+                         alert('註冊失敗：Email/密碼註冊方式未啟用！');
+                     } else if (error.code === 'auth/weak-password') {
+                         alert('註冊失敗：密碼至少輸入6位！');
+                     }
+                     else {
+                        alert('註冊失敗，請再試一次！');
+                     }
+                } else {
+                    alert("系統錯誤，請稍後再試！");
+                }
+            }
+        }
+        // 儲存單字
+        function saveWord() {
+            const word = document.getElementById('word_input').value.trim();
+            if (!word) {
+                alert("請輸入單字！");
+                return;
+            }
+            apiRequest(
+                '/save_word',
+                { word: word },
+                (data) => {
+                    alert(data.message);
+                    if (data.success) {
+                        document.getElementById('word_input').value = '';
+                        loadAllWords();
+                    }
+                },
+                () => {
+                    alert("儲存失敗，請檢查網路或伺服器狀態！");
+                }
+            );
+        }
+
+        // 刪除單字
+        function deleteWord() {
+            const word = document.getElementById('word_input').value.trim();
+            if (!word) {
+                alert("請輸入要刪除的單字！");
+                return; 
+            }
+
+            apiRequest(
+                '/delete_word',
+                { word },
+                (data) => {
+                    if (!data.success) {
+                        alert(data.message);
+                        return;
+                    }
+                    showMessage(data.message, 'delete');
+
+                    document.getElementById('word_input').value = '';
+                    loadAllWords();
+                },
+                () => {
+                    alert("刪除失敗，請檢查網路或伺服器狀態！");
+                }
+            );
+        }
+
+        // 搜尋單字
+        function searchWord() {
+            const keyword = document.getElementById('word_input').value.trim();
+            if (!keyword) {
+                alert("請輸入搜尋關鍵字！");
+                return;
+            }
+            apiRequest(
+                '/search_word',
+                { keyword: keyword },
+                (data) => {
+                    const searchResults = document.getElementById('searchResults');
+                    if (data.success) {
+                        searchResults.innerText = data.words.join('\n');
+                        searchResults.style.display = 'block';
+                    } else {
+                        searchResults.innerText = data.message;
+                        searchResults.style.display = 'block';
+                    }
+                },
+                () => {
+                    alert("搜尋失敗，請檢查網路或伺服器狀態！");
+                }
+            );
+        }
+
+        // 標記不熟
+        function markUnfamiliar() {
+            if (currentIndex >= currentWords.length) return;
+            const word = currentWords[currentIndex].word;
+            apiRequest(
+                '/mark_unfamiliar',
+                { word: word },
+                (data) => {
+                    if (data.success) {
+                        currentWords[currentIndex].is_unfamiliar = true;
+                        updateWordDisplay();
+                        loadAllWords();
+                    }
+                    alert(data.message);
+                },
+                () => {
+                    alert("標記失敗，請檢查網路或伺服器狀態！");
+                }
+            );
+        }
+
+        // 取消標記不熟
+        function unmarkUnfamiliar() {
+            if (currentIndex >= currentWords.length) return;
+            const word = currentWords[currentIndex].word;
+            apiRequest(
+                '/unmark_unfamiliar',
+                { word: word },
+                (data) => {
+                    if (data.success) {
+                        currentWords[currentIndex].is_unfamiliar = false;
+                        updateWordDisplay();
+                        loadAllWords();
+                    }
+                    alert(data.message);
+                },
+                () => {
+                    alert("取消標記失敗，請檢查網路或伺服器狀態！");
+                }
+            );
+        }
+
+        // 複習單字
+        function reviewWords(isUnfamiliar) {
+            apiRequest(
+                '/review_words',
+                { is_unfamiliar: isUnfamiliar },
+                (data) => {
+                    if (data.success) {
+                        startReview(data.words);
+                    } else {
+                        alert(data.message);
+                    }
+                },
+                () => {
+                    alert("複習失敗，請檢查網路或伺服器狀態！");
+                }
+            );
+        }
+
+        // 隨機 10 個單字
+        function randomWords(isUnfamiliar) {
+            apiRequest(
+                '/random_words',
+                { is_unfamiliar: isUnfamiliar },
+                (data) => {
+                    if (data.success) {
+                        startReview(data.words);
+                    } else {
+                        alert(data.message);
+                    }
+                },
+                () => {
+                    alert("隨機單字失敗，請檢查網路或伺服器狀態！");
+                }
+            );
+        }
+
+        // 載入所有單字
+        function loadAllWords() {
+            apiRequest(
+                '/load_all_words',
+                {},
+                (data) => {
+                    const allWordsList = document.getElementById('allWordsList');
+                    const unfamiliarWordsList = document.getElementById('unfamiliarWordsList');
+                    if (data.success) {
+                        allWordsList.innerHTML = '<h3>單字列表</h3>';
+                        data.words.forEach(word => {
+                            allWordsList.innerHTML += `<div>${word.word}</div>`;
+                        });
+                        unfamiliarWordsList.innerHTML = '<h3>不熟的單字</h3>';
+                        const unfamiliarWords = data.words.filter(word => word.is_unfamiliar);
+                        if (unfamiliarWords.length > 0) {
+                            unfamiliarWords.forEach(word => {
+                                unfamiliarWordsList.innerHTML += `<div>${word.word}</div>`;
+                            });
+                        } else {
+                            unfamiliarWordsList.innerHTML += '<p>目前沒有不熟的單字！</p>';
+                        }
+                    } else {
+                        allWordsList.innerHTML = '<p>目前沒有單字！</p>';
+                        unfamiliarWordsList.innerHTML = '<p>目前沒有不熟的單字！</p>';
+                    }
+                },
+                () => {
+                    alert("載入單字失敗，請檢查網路或伺服器狀態！");
+                }
+            );
+        }
+
+        // 顯示/隱藏所有單字列表
+        function toggleAllWordsList() {
+            const allWordsList = document.getElementById('allWordsList');
+            allWordsList.style.display = allWordsList.style.display === 'none' ? 'block' : 'none';
+        }
+
+        // 顯示/隱藏不熟單字列表
+        function toggleUnfamiliarWordsList() {
+            const unfamiliarWordsList = document.getElementById('unfamiliarWordsList');
+            unfamiliarWordsList.style.display = unfamiliarWordsList.style.display === 'none' ? 'block' : 'none';
+        }
+
+        // 開始複習
+        function startReview(words) {
+            currentWords = words;
+            currentIndex = 0;
+            updateWordDisplay();
+            speak(currentWords[currentIndex].word);
+            const wordControls = document.getElementById('word_controls');
+            wordControls.style.display = 'block';
+            wordControls.innerHTML = `
+                <button onclick="markUnfamiliar()">標記不熟</button>
+                <button onclick="unmarkUnfamiliar()">取消標記不熟</button>
+                <button onclick="repeatWord()">再唸一次</button>
+                <button onclick="nextWord()">下一個單字</button>
+            `;
+            document.getElementById('searchResults').style.display = 'none';
+        }
+
+        // 更新單字顯示
+        function updateWordDisplay() {
+            const word = currentWords[currentIndex];
+            const status = word.is_unfamiliar ? '<span class="unfamiliar"> (不熟)</span>' : "";
+            document.getElementById('word_display').innerHTML =
+                `${word.word}${status}<br><a href="https://www.google.com/search?q=${word.word}+翻譯 Asian" target="_blank">${word.word}翻譯</a>`;
+        }
+
+        // 語音功能
+        function speak(word) {
+            if ('speechSynthesis' in window) {
+                const utterance = new SpeechSynthesisUtterance(word);
+                utterance.lang = 'en-US';
+                utterance.rate = 1.0;
+                window.speechSynthesis.speak(utterance);
+            } else {
+                alert("您的瀏覽器不支援語音功能，請使用現代瀏覽器（如 Chrome、Edge）！");
+            }
+        }
+
+        // 再唸一次
+        function repeatWord() {
+            if (currentIndex < currentWords.length) {
+                speak(currentWords[currentIndex].word);
+            }
+        }
+
+        // 下一個單字
+        function nextWord() {
+            if (currentIndex + 1 < currentWords.length) {
+                currentIndex++;
+                updateWordDisplay();
+                speak(currentWords[currentIndex].word);
+            } else {
+                alert('已經是最後一個單字！');
+            }
+        }
+
+        // 顯示消息
+        function showMessage(message, type) {
+            const messageDiv = document.getElementById('message');
+            messageDiv.innerText = message;
+            messageDiv.className = `message-${type}`;
+            messageDiv.style.display = 'block';
+            setTimeout(() => {
+                messageDiv.style.display = 'none';
+            }, 3000);
+        }
+    </script>
+</body>
+</html>
